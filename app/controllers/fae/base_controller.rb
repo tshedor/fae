@@ -1,7 +1,6 @@
 module Fae
   class BaseController < ApplicationController
     include Fae::Cloneable
-    include Fae::Authorization
 
     before_action :set_class_variables
     before_action :set_item, only: [:edit, :update, :destroy]
@@ -10,7 +9,7 @@ module Fae
     helper FormHelper
 
     def index
-      @items = @klass.for_fae_index
+      @items = @klass.for_fae_index.page(params[:page])
       respond_to do |format|
         format.html
         format.csv { send_data @items.to_csv, filename: @items.name.parameterize + "." + Time.now.to_s(:filename) + '.csv'  }
@@ -60,9 +59,9 @@ module Fae
 
     def filter
       if params[:commit] == "Reset Search"
-        @items = @klass.filter_all
+        @items = @klass.filter_all.page(params[:page])
       else
-        @items = @klass.filter(params[:filter])
+        @items = @klass.filter(params).fae_sort(params).page(params[:page])
       end
 
       render :index, layout: false
@@ -92,6 +91,12 @@ module Fae
 
     # if model has images or files, build them here for nesting
     def build_assets
+    end
+
+    def authorize_user
+      roles_for_controller = Fae::Authorization.access_map[params[:controller].gsub('admin/','')]
+      return if current_user.super_admin? || roles_for_controller.blank?
+      return show_404 unless roles_for_controller.include?(current_user.role.name)
     end
 
   end
